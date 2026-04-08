@@ -1,71 +1,90 @@
 import os
-import sys
+import uuid
+import logging
+from typing import Dict, Any, Optional
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
-from env.environment import CloudOpsEngine
-import logging
 
+# --- Configure Logging ---
 logging.basicConfig(level=logging.INFO, format='[STEP] %(message)s')
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# --- CloudOps Engine Logic ---
+class CloudOpsEngine:
+    def __init__(self):
+        self.reset()
 
+    def reset(self):
+        self.resources = {"instances": [], "buckets": []}
+        self.task_states = {
+            "task_1": {"provisioned": False},
+            "task_2": {"bucket_created": False, "file_uploaded": False},
+            "task_3": {"instance_created": False, "bucket_created": False}
+        }
+
+    def get_state(self):
+        return {"resources": self.resources, "task_progress": self.task_states}
+
+    def step(self, action: str, params: Dict[str, Any]):
+        if action == "create_instance":
+            name, itype, region = params.get("name"), params.get("type"), params.get("region")
+            if all([name, itype, region]):
+                self.resources["instances"].append({"name": name, "type": itype, "region": region, "status": "running"})
+                if name == "web-server" and itype == "t3.micro": self.task_states["task_1"]["provisioned"] = True
+                if name == "db-prod" and itype == "m5.large": self.task_states["task_3"]["instance_created"] = True
+        elif action == "create_bucket":
+            name = params.get("name")
+            if name:
+                self.resources["buckets"].append({"name": name, "files": []})
+                if name == "company-reports": self.task_states["task_2"]["bucket_created"] = True
+                if name == "db-backups": self.task_states["task_3"]["bucket_created"] = True
+        elif action == "upload_file":
+            bname, fname, content = params.get("bucket"), params.get("name"), params.get("content")
+            bucket = next((b for b in self.resources["buckets"] if b["name"] == bname), None)
+            if bucket:
+                bucket["files"].append({"name": fname, "content": content})
+                if bname == "company-reports" and fname == "policy.txt": self.task_states["task_2"]["file_uploaded"] = True
+        return {"status": "success"}
+
+    def calculate_reward(self, task_id: str) -> float:
+        if task_id == "task_1": return 1.0 if self.task_states["task_1"]["provisioned"] else 0.0
+        if task_id == "task_2": return 1.0 if self.task_states["task_2"]["file_uploaded"] else 0.0
+        if task_id == "task_3": return 1.0 if self.task_states["task_3"]["bucket_created"] and self.task_states["task_3"]["instance_created"] else 0.0
+        return 0.0
+
+# --- FastAPI Server ---
+app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 engine = CloudOpsEngine()
 
 @app.get("/")
-async def root():
-    return {"status": "ok"}
+def root(): return {"status": "ok"}
 
 @app.get("/health")
-def health():
-    return {"status": "ok"}
+def health(): return {"status": "ok"}
 
 @app.post("/reset")
 async def reset(request: Request):
-    print("[START]")
-    try:
-        body = await request.body()
-    except Exception:
-        pass
-    
     engine.reset()
-    obs = engine.get_state()
-    return JSONResponse(content=obs)
+    return JSONResponse(content=engine.get_state())
 
 @app.post("/step")
 async def step(request: Request):
-    try:
-        body = await request.json()
-        action = body.get("action")
-        params = body.get("params", {})
-        task_id = body.get("task_id", "")
-    except Exception:
-        return JSONResponse(status_code=400, content={"detail": "Invalid JSON"})
-    
-    result = engine.step(action, params)
-    
-    reward_val = engine.calculate_reward(task_id) if task_id else 0.0
-    done = (reward_val == 1.0)
-    
+    body = await request.json()
+    action, params, tid = body.get("action"), body.get("params", {}), body.get("task_id", "")
+    engine.step(action, params)
+    reward = engine.calculate_reward(tid) if tid else 0.0
     return JSONResponse(content={
         "observation": engine.get_state(),
-        "reward": {"value": reward_val},
-        "done": done,
-        "info": {"message": result.get("message", "")}
+        "reward": {"value": reward},
+        "done": (reward == 1.0),
+        "info": {}
     })
 
 @app.get("/state")
-def state():
-    return JSONResponse(content=engine.get_state())
+def state(): return JSONResponse(content=engine.get_state())
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 7860))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=7860)
