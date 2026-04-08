@@ -1,0 +1,18 @@
+[project]
+name = "cloudops-simulator"
+version = "1.0.0"
+description = "Cloud Infrastructure Simulation Environment for AI Agents"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic",
+    "httpx",
+    "openai",
+    "pyyaml"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
