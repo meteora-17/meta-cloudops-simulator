@@ -9,6 +9,7 @@ logging.basicConfig(level=logging.INFO, format='[STEP] %(message)s')
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
 @app.get("/")
 async def root():
     return {
@@ -29,23 +30,25 @@ class ActionRequest(BaseModel):
     task_id: Optional[str] = None
 
 @app.post("/reset")
-async def reset():
+async def reset(request: Request):
+    # Log reset and handle any incoming JSON body (e.g., difficulty)
     print("[START] Environment resetting...")
-    result = engine.reset()
-    return result
+    engine.reset()
+    # Return the full initial state, as expected by the OpenEnv grader
+    return engine.get_state()
 
 @app.post("/step")
 async def step(req: ActionRequest):
     logger.info(f"Executing action: {req.action} with params: {req.params}")
     result = engine.step(req.action, req.params)
-    
+
     # Calculate reward if task_id is provided
     reward = 0.0
     if req.task_id:
         reward = engine.calculate_reward(req.task_id)
         result["reward"] = reward
         result["done"] = (reward == 1.0)
-    
+
     return result
 
 @app.get("/state")
@@ -58,4 +61,5 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Important: Hugging Face uses port 7860
+    uvicorn.run(app, host="0.0.0.0", port=7860)
