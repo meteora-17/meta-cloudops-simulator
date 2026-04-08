@@ -15,10 +15,10 @@ dependencies = [
 ]
 
 [project.scripts]
-server = "server.app:main"
+server = "main:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["server"]
+packages = ["."]
 
 [build-system]
 requires = ["hatchling"]
