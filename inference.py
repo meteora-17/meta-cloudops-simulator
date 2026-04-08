@@ -1,7 +1,6 @@
 import os
 import json
 import httpx
-import yaml
 from openai import OpenAI
 import time
 
@@ -20,7 +19,7 @@ def step(action: str, params: dict, task_id: str):
     return response.json()
 
 def reset():
-    print("[START]") # Pure start tag
+    print("[START]")
     response = httpx.post(f"{API_BASE_URL}/reset")
     return response.json()
 
@@ -29,6 +28,24 @@ def get_state():
     return response.json()
 
 SYSTEM_PROMPT = "You are a Cloud Ops agent. Output ONLY a JSON object with 'action' and 'params'."
+
+TASKS = [
+    {
+        "id": "task_1",
+        "name": "Basic Provisioning",
+        "description": "Create a 't3.micro' instance named 'web-server' in the 'us-east-1' region."
+    },
+    {
+        "id": "task_2",
+        "name": "Storage Setup",
+        "description": "Create a secure storage bucket named 'company-reports' and upload a file 'policy.txt' with the content 'confidential-data'."
+    },
+    {
+        "id": "task_3",
+        "name": "Full Stack Infrastructure",
+        "description": "Deploy a production-ready environment: create an 'm5.large' instance named 'db-prod' and a bucket 'db-backups'."
+    }
+]
 
 def solve_task(task):
     task_id = task["id"]
@@ -51,7 +68,7 @@ def solve_task(task):
             if "`json" in content: content = content.split("`json")[1].split("`")[0].strip()
             
             decision = json.loads(content)
-            print(f"[STEP]") # Pure step tag
+            print(f"[STEP]")
             result = step(decision["action"], decision["params"], task_id)
             
             if result.get("done"):
@@ -63,10 +80,6 @@ def solve_task(task):
 
 if __name__ == "__main__":
     reset()
-    with open("openenv.yaml", "r") as f:
-        config = yaml.safe_load(f)
-    
-    for task in config["tasks"]:
+    for task in TASKS:
         solve_task(task)
-    
-    print("[END]") # Pure end tag
+    print("[END]")
