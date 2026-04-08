@@ -2,5 +2,5 @@ spec_version: 1
 name: cloudops-simulator
 type: environment
 runtime: docker
-app: main.py
+app: server/app.py
 port: 7860
